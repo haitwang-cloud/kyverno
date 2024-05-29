@@ -29,7 +29,7 @@ func (p *ValidatingAdmissionPolicyProcessor) ApplyPolicyOnResource() ([]engineap
 		}
 		response, _ := validatingadmissionpolicy.Validate(policyData, *p.Resource, p.NamespaceSelectorMap, p.Client)
 		responses = append(responses, response)
-		p.Rc.addValidatingAdmissionResponse(response)
+		p.Rc.addValidatingAdmissionResponse(policy, response)
 	}
 	return responses, nil
 }

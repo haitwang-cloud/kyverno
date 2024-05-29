@@ -90,7 +90,7 @@ func Command() *cobra.Command {
 			cmd.SilenceErrors = true
 			printSkippedAndInvalidPolicies(out, skipInvalidPolicies)
 			if applyCommandConfig.PolicyReport {
-				printReports(out, responses, applyCommandConfig.AuditWarn)
+				printReport(out, responses, applyCommandConfig.AuditWarn)
 			} else if table {
 				printTable(out, detailedResults, applyCommandConfig.AuditWarn, responses...)
 			} else {
@@ -153,7 +153,7 @@ func (c *ApplyCommandConfig) applyCommandHelper(out io.Writer) (*processor.Resul
 		return nil, nil, skipInvalidPolicies, nil, fmt.Errorf("failed to decode yaml (%w)", err)
 	}
 	var store store.Store
-	rc, resources1, skipInvalidPolicies, responses1, dClient, err := c.initStoreAndClusterClient(&store, skipInvalidPolicies)
+	rc, resources1, skipInvalidPolicies, responses1, err, dClient := c.initStoreAndClusterClient(&store, skipInvalidPolicies)
 	if err != nil {
 		return rc, resources1, skipInvalidPolicies, responses1, err
 	}
@@ -169,7 +169,7 @@ func (c *ApplyCommandConfig) applyCommandHelper(out io.Writer) (*processor.Resul
 	if err != nil {
 		return rc, resources1, skipInvalidPolicies, responses1, fmt.Errorf("Error: failed to load exceptions (%s)", err)
 	}
-	if !c.Stdin && !c.PolicyReport {
+	if !c.Stdin {
 		var policyRulesCount int
 		for _, policy := range policies {
 			policyRulesCount += len(autogen.ComputeRules(policy, ""))
@@ -378,7 +378,7 @@ func (c *ApplyCommandConfig) loadPolicies(skipInvalidPolicies SkippedInvalidPoli
 	return nil, nil, skipInvalidPolicies, nil, policies, vaps, vapBindings, nil
 }
 
-func (c *ApplyCommandConfig) initStoreAndClusterClient(store *store.Store, skipInvalidPolicies SkippedInvalidPolicies) (*processor.ResultCounts, []*unstructured.Unstructured, SkippedInvalidPolicies, []engineapi.EngineResponse, dclient.Interface, error) {
+func (c *ApplyCommandConfig) initStoreAndClusterClient(store *store.Store, skipInvalidPolicies SkippedInvalidPolicies) (*processor.ResultCounts, []*unstructured.Unstructured, SkippedInvalidPolicies, []engineapi.EngineResponse, error, dclient.Interface) {
 	store.SetLocal(true)
 	store.SetRegistryAccess(c.RegistryAccess)
 	if c.Cluster {
@@ -389,22 +389,22 @@ func (c *ApplyCommandConfig) initStoreAndClusterClient(store *store.Store, skipI
 	if c.Cluster {
 		restConfig, err := config.CreateClientConfigWithContext(c.KubeConfig, c.Context)
 		if err != nil {
-			return nil, nil, skipInvalidPolicies, nil, nil, err
+			return nil, nil, skipInvalidPolicies, nil, err, nil
 		}
 		kubeClient, err := kubernetes.NewForConfig(restConfig)
 		if err != nil {
-			return nil, nil, skipInvalidPolicies, nil, nil, err
+			return nil, nil, skipInvalidPolicies, nil, err, nil
 		}
 		dynamicClient, err := dynamic.NewForConfig(restConfig)
 		if err != nil {
-			return nil, nil, skipInvalidPolicies, nil, nil, err
+			return nil, nil, skipInvalidPolicies, nil, err, nil
 		}
 		dClient, err = dclient.NewClient(context.Background(), dynamicClient, kubeClient, 15*time.Minute)
 		if err != nil {
-			return nil, nil, skipInvalidPolicies, nil, nil, err
+			return nil, nil, skipInvalidPolicies, nil, err, nil
 		}
 	}
-	return nil, nil, skipInvalidPolicies, nil, dClient, err
+	return nil, nil, skipInvalidPolicies, nil, err, dClient
 }
 
 func (c *ApplyCommandConfig) cleanPreviousContent(mutateLogPathIsDir bool, skipInvalidPolicies SkippedInvalidPolicies) (*processor.ResultCounts, []*unstructured.Unstructured, SkippedInvalidPolicies, []engineapi.EngineResponse, error) {
@@ -457,17 +457,18 @@ func printSkippedAndInvalidPolicies(out io.Writer, skipInvalidPolicies SkippedIn
 	}
 }
 
-func printReports(out io.Writer, engineResponses []engineapi.EngineResponse, auditWarn bool) {
+func printReport(out io.Writer, engineResponses []engineapi.EngineResponse, auditWarn bool) {
 	clustered, namespaced := report.ComputePolicyReports(auditWarn, engineResponses...)
-	if len(clustered) > 0 {
+	if len(clustered) > 0 || len(namespaced) > 0 {
+		fmt.Fprintln(out, divider)
+		fmt.Fprintln(out, "POLICY REPORT:")
+		fmt.Fprintln(out, divider)
 		report := report.MergeClusterReports(clustered)
 		yamlReport, _ := yaml.Marshal(report)
 		fmt.Fprintln(out, string(yamlReport))
-	}
-	for _, r := range namespaced {
-		fmt.Fprintln(out, string("---"))
-		yamlReport, _ := yaml.Marshal(r)
-		fmt.Fprintln(out, string(yamlReport))
+	} else {
+		fmt.Fprintln(out, divider)
+		fmt.Fprintln(out, "POLICY REPORT: skip generating policy report (no validate policy found/resource skipped)")
 	}
 }
 

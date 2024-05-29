@@ -4,6 +4,7 @@ import (
 	"github.com/kyverno/kyverno/cmd/cli/kubectl-kyverno/policy/annotations"
 	"github.com/kyverno/kyverno/pkg/autogen"
 	engineapi "github.com/kyverno/kyverno/pkg/engine/api"
+	"k8s.io/api/admissionregistration/v1alpha1"
 )
 
 type ResultCounts struct {
@@ -63,7 +64,7 @@ func (rc *ResultCounts) addEngineResponse(auditWarn bool, response engineapi.Eng
 	}
 }
 
-func (rc *ResultCounts) addGenerateResponse(auditWarn bool, response engineapi.EngineResponse) {
+func (rc *ResultCounts) addGenerateResponse(auditWarn bool, resPath string, response engineapi.EngineResponse) {
 	genericPolicy := response.Policy()
 	if polType := genericPolicy.GetType(); polType == engineapi.ValidatingAdmissionPolicyType {
 		return
@@ -87,7 +88,7 @@ func (rc *ResultCounts) addGenerateResponse(auditWarn bool, response engineapi.E
 	}
 }
 
-func (rc *ResultCounts) addMutateResponse(response engineapi.EngineResponse) bool {
+func (rc *ResultCounts) addMutateResponse(resourcePath string, response engineapi.EngineResponse) bool {
 	genericPolicy := response.Policy()
 	if polType := genericPolicy.GetType(); polType == engineapi.ValidatingAdmissionPolicyType {
 		return false
@@ -123,7 +124,7 @@ func (rc *ResultCounts) addMutateResponse(response engineapi.EngineResponse) boo
 	return printMutatedRes
 }
 
-func (rc *ResultCounts) addValidatingAdmissionResponse(engineResponse engineapi.EngineResponse) {
+func (rc *ResultCounts) addValidatingAdmissionResponse(vap v1alpha1.ValidatingAdmissionPolicy, engineResponse engineapi.EngineResponse) {
 	for _, ruleResp := range engineResponse.PolicyResponse.Rules {
 		if ruleResp.Status() == engineapi.RuleStatusPass {
 			rc.Pass++

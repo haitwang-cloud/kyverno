@@ -17,6 +17,7 @@ import (
 
 func Test_Apply(t *testing.T) {
 	type TestCase struct {
+		gitBranch             string
 		expectedPolicyReports []policyreportv1alpha2.PolicyReport
 		config                ApplyCommandConfig
 		stdinFile             string
