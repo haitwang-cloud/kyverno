@@ -347,7 +347,7 @@ func (iv *ImageVerifier) verifyImage(
 			iv.ivm.Add(image, engineapi.ImageVerificationSkip)
 			return engineapi.RuleSkip(iv.rule.Name, engineapi.ImageVerify, fmt.Sprintf("skipping image reference image %s, policy %s ruleName %s", image, iv.policyContext.Policy().GetName(), iv.rule.Name)).WithEmitWarning(true), ""
 		}
-		ruleResp, cosignResp := iv.verifyAttestors(ctx, imageVerify.Attestors, imageVerify, imageInfo)
+		ruleResp, cosignResp := iv.verifyAttestors(ctx, imageVerify.Attestors, imageVerify, imageInfo, "")
 		if ruleResp.Status() != engineapi.RuleStatusPass {
 			return ruleResp, ""
 		}
@@ -367,6 +367,7 @@ func (iv *ImageVerifier) verifyAttestors(
 	attestors []kyvernov1.AttestorSet,
 	imageVerify kyvernov1.ImageVerification,
 	imageInfo apiutils.ImageInfo,
+	predicateType string,
 ) (*engineapi.RuleResponse, *images.Response) {
 	var cosignResponse *images.Response
 	image := imageInfo.String()
@@ -535,7 +536,7 @@ func (iv *ImageVerifier) buildVerifier(
 ) (images.ImageVerifier, *images.Options, string) {
 	switch imageVerify.Type {
 	case kyvernov1.Notary:
-		return iv.buildNotaryVerifier(attestor, image, attestation)
+		return iv.buildNotaryVerifier(attestor, imageVerify, image, attestation)
 	default:
 		return iv.buildCosignVerifier(attestor, imageVerify, image, attestation)
 	}
@@ -591,7 +592,6 @@ func (iv *ImageVerifier) buildCosignVerifier(
 		if attestor.Keys.CTLog != nil {
 			opts.IgnoreSCT = attestor.Keys.CTLog.IgnoreSCT
 			opts.CTLogsPubKey = attestor.Keys.CTLog.CTLogPubKey
-			opts.TSACertChain = attestor.Keys.CTLog.TSACertChain
 		} else {
 			opts.IgnoreSCT = false
 		}
@@ -613,7 +613,6 @@ func (iv *ImageVerifier) buildCosignVerifier(
 		if attestor.Certificates.CTLog != nil {
 			opts.IgnoreSCT = attestor.Certificates.CTLog.IgnoreSCT
 			opts.CTLogsPubKey = attestor.Certificates.CTLog.CTLogPubKey
-			opts.TSACertChain = attestor.Certificates.CTLog.TSACertChain
 		} else {
 			opts.IgnoreSCT = false
 		}
@@ -631,7 +630,6 @@ func (iv *ImageVerifier) buildCosignVerifier(
 		if attestor.Keyless.CTLog != nil {
 			opts.IgnoreSCT = attestor.Keyless.CTLog.IgnoreSCT
 			opts.CTLogsPubKey = attestor.Keyless.CTLog.CTLogPubKey
-			opts.TSACertChain = attestor.Keyless.CTLog.TSACertChain
 		} else {
 			opts.IgnoreSCT = false
 		}
@@ -656,6 +654,7 @@ func (iv *ImageVerifier) buildCosignVerifier(
 
 func (iv *ImageVerifier) buildNotaryVerifier(
 	attestor kyvernov1.Attestor,
+	imageVerify kyvernov1.ImageVerification,
 	image string,
 	attestation *kyvernov1.Attestation,
 ) (images.ImageVerifier, *images.Options, string) {
